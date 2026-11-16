@@ -1,5 +1,7 @@
 # 官方全双工 AUDIO 模式的并行 ASR / RAG
 
+最新副本同步行为见 [COPY_SYNC_UPDATE.md](COPY_SYNC_UPDATE.md)：默认标题检索；音频无证据交由模型生成；全文检索用 `--full-text`。
+
 `run_rag.py --audio` 现在将 ASR 和检索放在后台 worker，与 MiniCPM AUDIO 处理并行。
 Whisper-small 和 MiniCPM 默认常驻同一逻辑 GPU `cuda:0`。模型源码未修改，不使用私有 KV 注入。
 文字问题、音频问题及 RAG 注入在应用运行路径中均使用 AUDIO，没有独立 TEXT prefill。
@@ -120,3 +122,22 @@ CUDA_VISIBLE_DEVICES=0 python -u tests/integration_rag.py \
 其中串行 ASR、独立 TEXT、音频空回答等描述对应旧实现，不代表当前调用顺序。
 
 本仓库不包含 model/、models/、outputs/。报告中的原工作区路径是历史记录；新环境以本指南和 README 的命令为准。
+
+
+## 副本同步更新：标题检索与音频无证据行为
+
+本次从 omni_bench_eval/minicpm_official_rag_test 同步四个文件的行为变化：
+async_audio_rag.py、official_runtime.py、rag_pipeline.py 和音频流水线测试。
+
+- 默认 title_only=True：仅标题建立TF-IDF索引，双字过滤也仅比较标题，正文仍作为证据返回。
+- CLI新增 --full-text 显式使用标题+正文检索；API可用 RetrievalConfig(title_only=False)。
+  差旅样例问题“上海出差住宿能报多少”需 --full-text，否则默认标题检索可能无命中。
+- 音频路径无可用证据时仍注入空 reference，维持 AUDIO 注入门控后由模型决定回答或拒绝。
+  返回 no_evidence=true、application_refusal_enabled=false、generation_called=true；
+  status按正常结束及非空文字判定 answered/incomplete，不代表有证据或事实正确。
+- 文字路径的应用层固定拒答和 retrieve-only 行为保持原有逻辑。
+- 空参考资料下模型可能输出无依据内容；该变化是取消音频应用拒答，不是事实性改善。
+- 差旅多轮集成脚本明确使用 --full-text；新增CLI测试覆盖默认标题模式与全文选项。
+
+旧报告记录的是当时实现，本节更新覆盖其中“音频无证据不生成”的历史描述。
+本次验证为单元测试及编译检查，没有重新运行真实GPU生成实验。

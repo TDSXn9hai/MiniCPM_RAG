@@ -77,6 +77,7 @@ def main():
     inputs.add_argument("--audio", type=Path, help="mono/file audio, at most 30 seconds")
     inputs.add_argument("--interactive", action="store_true")
     parser.add_argument("--knowledge", type=Path, default=ROOT / "knowledge/sample.json")
+    parser.add_argument("--full-text", action="store_true", help="index title and content instead of title only")
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--min-score", type=float, default=0.08)
     parser.add_argument("--min-shared-bigrams", type=int, default=2)
@@ -104,7 +105,8 @@ def main():
         parser.error("retrieval timeout and wait unit interval must be positive")
     try:
         config = RetrievalConfig(
-            args.top_k, args.min_score, args.max_evidence_chars, args.min_shared_bigrams
+            args.top_k, args.min_score, args.max_evidence_chars, args.min_shared_bigrams,
+            title_only=not args.full_text
         )
         runtime = OfficialDuplexRuntime(
             model_path=args.model_path, ref_audio_path=args.ref_audio,

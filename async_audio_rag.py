@@ -177,11 +177,12 @@ class AsyncAudioRAGPipeline:
                 "citations": [asdict(c) for c in retrieval.evidence.citations],
                 "asr": prepared.asr, "background": prepared.timings,
                 "runtime_events": events, "units": units,
-                "text": REFUSAL if no_evidence else joined,
-                "status": "no_evidence" if no_evidence else
-                          ("answered" if ended and joined.strip() else "incomplete"),
-                "ended_naturally": True if no_evidence else ended,
-                "model_called": True, "generation_called": not no_evidence,
+                "text": joined,
+                "status": "answered" if ended and joined.strip() else "incomplete",
+                "no_evidence": no_evidence,
+                "application_refusal_enabled": False,
+                "ended_naturally": ended,
+                "model_called": True, "generation_called": True,
             }
         finally:
             if stream is not None:

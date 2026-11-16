@@ -30,7 +30,7 @@ def main():
     log = (target / "run.log").open("w")
     process = subprocess.Popen(
         [sys.executable, "-u", str(ROOT / "run_rag.py"),
-         "--interactive", "--knowledge", str(fixture), "--output", str(target)],
+         "--interactive", "--full-text", "--knowledge", str(fixture), "--output", str(target)],
         stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT,
         text=True, env=os.environ.copy(),
     )

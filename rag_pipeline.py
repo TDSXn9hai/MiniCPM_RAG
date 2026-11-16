@@ -22,7 +22,7 @@ class RetrievalConfig:
     min_score: float = 0.08
     max_evidence_chars: int = 900
     min_shared_bigrams: int = 2
-    title_only: bool = False
+    title_only: bool = True
 
     def __post_init__(self):
         if self.top_k < 1:

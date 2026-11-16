@@ -117,7 +117,7 @@ def test_asr_failure_never_releases_for_speech(tmp_path):
     assert not runtime._session_ready
 
 
-def test_audio_no_evidence_refuses_after_listening_without_generation(tmp_path):
+def test_audio_no_evidence_still_generates_model_response(tmp_path):
     from async_audio_rag import ASRRetrievalWorker, AsyncAudioRAGPipeline
     runtime, _, duplex = make_runtime(tmp_path)
     class ASR:
@@ -127,10 +127,15 @@ def test_audio_no_evidence_refuses_after_listening_without_generation(tmp_path):
     worker = ASRRetrievalWorker(ASR(), retrieval(tmp_path))
     try:
         result = AsyncAudioRAGPipeline(worker, runtime).answer(np.zeros(16000, np.float32))
-        assert result['status'] == 'no_evidence'
-        assert result['model_called'] and not result['generation_called']
-        assert not result['units']
-        assert all('text_list' not in kw for name, kw in duplex.calls if name == 'prefill')
+        assert result['status'] == 'answered'
+        assert result['model_called'] and result['generation_called']
+        assert result['no_evidence'] and not result['application_refusal_enabled']
+        assert result['text'] == '每晚六百元。'
+        assert result['units'][-1]['end_of_turn']
+        payloads = [kw['text_list'][0] for name, kw in duplex.calls
+                    if name == 'prefill' and 'text_list' in kw]
+        assert len(payloads) == 1
+        assert '<reference>\n\n</reference>' in payloads[0]
     finally:
         worker.close()
         runtime.close()

@@ -237,9 +237,8 @@ class OfficialDuplexRuntime:
             prepared = retrieval_future.result()
             on_ready(prepared)
             retrieval = prepared.retrieval
-            if not retrieval.usable:
-                complete[0] = True
-                return
+            # An empty reference is still passed to the model. Let it decide
+            # whether to answer or refuse rather than ending in application code.
             prompt = build_rag_prompt(retrieval.query, retrieval.evidence.text)
             for chunk in self._stream_response(prompt, on_event=on_event):
                 complete[0] = chunk["end_of_turn"]
