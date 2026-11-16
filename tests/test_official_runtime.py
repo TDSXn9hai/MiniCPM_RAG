@@ -23,7 +23,7 @@ class FakeDuplex:
         self.since_prepare = 0
 
     def streaming_prefill(self, **kwargs):
-        assert not ("text_list" in kwargs and "audio_waveform" in kwargs)
+        assert "audio_waveform" in kwargs
         self.calls.append(("prefill", kwargs))
         return {"success": True}
 
@@ -55,6 +55,8 @@ def test_first_query_primes_listening_then_uses_official_text_list(tmp_path):
     prefills = [kw for name, kw in duplex.calls if name == "prefill"]
     assert "audio_waveform" in prefills[0]
     assert "text_list" in prefills[1]
+    assert "audio_waveform" in prefills[1]
+    assert "text_list" not in prefills[2]
     prompt = "".join(prefills[1]["text_list"])
     assert "上海住宿多少" in prompt and "上海住宿六百元" in prompt
     assert model.resets == 1
@@ -77,7 +79,7 @@ def test_audio_question_is_ingested_listening_before_text_unit(tmp_path):
     ))
     calls = [kw for name, kw in duplex.calls if name == "prefill"]
     assert [next(iter(c)) for c in calls] == [
-        "audio_waveform", "audio_waveform", "audio_waveform", "text_list"
+        "audio_waveform", "audio_waveform", "audio_waveform", "audio_waveform", "audio_waveform"
     ]
 
 

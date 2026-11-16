@@ -3,6 +3,7 @@
 Run directly, not collected by pytest. Writes only under outputs/ and tests
 the public CLI in one persistent conversation. Never edits knowledge/sample.
 """
+import argparse
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,10 @@ from evaluation import amount_matches
 
 
 def main():
-    target = ROOT / "outputs/rag_integration"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=ROOT / "outputs/rag_integration")
+    args = parser.parse_args()
+    target = args.output.resolve()
     if target.exists():
         raise SystemExit(f"{target} exists; preserve it or choose a fresh path in this script")
     target.mkdir(parents=True)

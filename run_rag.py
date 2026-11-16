@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Text/file-audio RAG CLI using only the official full-duplex text_list entry."""
+"""RAG CLI: parallel same-GPU file ASR/retrieval, AUDIO-only MiniCPM injection."""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +15,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
+from async_audio_rag import ASRRetrievalWorker, AsyncAudioRAGPipeline, LocalWhisperASR
 from official_runtime import OfficialDuplexRuntime
 from rag_pipeline import RAGPipeline, RAGRetriever, RetrievalConfig
 
@@ -84,18 +85,30 @@ def main():
     parser.add_argument("--model-path", type=Path, default=ROOT / "model")
     parser.add_argument("--ref-audio", type=Path, default=ROOT / "assets/ref_audio.wav")
     parser.add_argument("--asr-model", type=Path, default=ROOT / "models/whisper-small")
-    parser.add_argument("--asr-device", default="cpu")
+    parser.add_argument("--device", default="cuda:0", help="logical CUDA device for both resident models")
+    parser.add_argument("--asr-device", default=None, help="must match --device for parallel audio")
+    parser.add_argument("--retrieval-timeout", type=float, default=120.0)
+    parser.add_argument("--wait-unit-seconds", type=float, default=1.0)
     parser.add_argument("--max-units", type=int, default=24)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
+    if args.device == "cuda":
+        args.device = "cuda:0"
+    args.asr_device = args.asr_device or args.device
+    if args.asr_device == "cuda":
+        args.asr_device = "cuda:0"
+    if args.audio and not args.retrieve_only and args.asr_device != args.device:
+        parser.error("parallel audio ASR and MiniCPM must use the same --device")
+    if args.retrieval_timeout <= 0 or args.wait_unit_seconds <= 0:
+        parser.error("retrieval timeout and wait unit interval must be positive")
     try:
         config = RetrievalConfig(
             args.top_k, args.min_score, args.max_evidence_chars, args.min_shared_bigrams
         )
         runtime = OfficialDuplexRuntime(
             model_path=args.model_path, ref_audio_path=args.ref_audio,
-            max_units=args.max_units, seed=args.seed,
+            max_units=args.max_units, seed=args.seed, device=args.device,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -105,12 +118,21 @@ def main():
         parser.error(f"{out} already contains results.json; choose a new --output")
     retriever = RAGRetriever(args.knowledge, config)
     pipeline = RAGPipeline(retriever, runtime)
+    audio_worker = None
+    audio_pipeline = None
+    if args.audio and not args.retrieve_only:
+        audio_worker = ASRRetrievalWorker(LocalWhisperASR(args.asr_model, args.device), retriever)
+        audio_pipeline = AsyncAudioRAGPipeline(
+            audio_worker, runtime, timeout_s=args.retrieval_timeout,
+            wait_unit_s=args.wait_unit_seconds)
     document = {
         "status": "running", "knowledge_path": str(retriever.path),
         "config": vars(config), "retrieve_only": args.retrieve_only,
         "model_path": str(args.model_path.resolve()),
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "model_load_s": None, "cases": [],
+        "device": args.device, "asr_device": args.asr_device,
+        "audio_mode_only": True, "parallel_audio_backend": audio_pipeline is not None,
     }
     write_json(out / "results.json", document)
     exit_code = 0
@@ -149,32 +171,50 @@ def main():
                 k: v for k, v in chunk.items() if k != "audio"
             })
 
+        def audio_event(kind, **payload):
+            emit(kind, turn=name, **payload)
+            if kind == "asr.final":
+                print("[asr]", payload["transcript"], flush=True)
+            elif kind == "retrieval.result":
+                print("[retrieval]", json.dumps(payload["citations"], ensure_ascii=False), flush=True)
+
         try:
-            retrieval = retriever.retrieve(query)
-            turn["retrieval"] = retrieval.to_dict()
-            citations = retrieval.to_dict()["citations"]
-            emit("retrieval.result", turn=name, **retrieval.to_dict())
-            print(f"\n[{name}] {query}", flush=True)
-            print("[retrieval]", json.dumps(citations, ensure_ascii=False), flush=True)
-            if args.retrieve_only:
-                turn.update({
-                    "status": "retrieved" if retrieval.usable else "no_evidence",
-                    "text": "", "citations": citations, "model_called": False,
-                })
-            else:
-                if retrieval.usable and runtime.load_s is None:
-                    import torch
-                    torch.set_num_threads(4)
-                    print("[model] loading local official MiniCPM-o...", flush=True)
-                turn.update(pipeline.answer_retrieved(
-                    retrieval, audio=audio, on_chunk=on_chunk
-                ))
-                if turn["status"] == "no_evidence":
-                    print(turn["text"], flush=True)
-                else:
-                    print(flush=True)
+            if audio is not None and audio_pipeline is not None:
+                import torch
+                torch.set_num_threads(4)
+                print(f"\n[{name}] background ASR/retrieval + MiniCPM AUDIO on {args.device}", flush=True)
+                turn.update(audio_pipeline.answer(
+                    audio, source=str(args.audio.resolve()), on_chunk=on_chunk,
+                    on_event=audio_event))
+                print(turn["text"] if turn["status"] == "no_evidence" else "", flush=True)
                 if turn["status"] == "incomplete":
                     print("[incomplete] model did not finish a nonempty answer", file=sys.stderr)
+            else:
+                retrieval = retriever.retrieve(query)
+                turn["retrieval"] = retrieval.to_dict()
+                citations = retrieval.to_dict()["citations"]
+                emit("retrieval.result", turn=name, **retrieval.to_dict())
+                print(f"\n[{name}] {query}", flush=True)
+                print("[retrieval]", json.dumps(citations, ensure_ascii=False), flush=True)
+                if args.retrieve_only:
+                    turn.update({
+                        "status": "retrieved" if retrieval.usable else "no_evidence",
+                        "text": "", "citations": citations, "model_called": False,
+                    })
+                else:
+                    if retrieval.usable and runtime.load_s is None:
+                        import torch
+                        torch.set_num_threads(4)
+                        print("[model] loading local official MiniCPM-o...", flush=True)
+                    turn.update(pipeline.answer_retrieved(
+                        retrieval, audio=audio, on_chunk=on_chunk
+                    ))
+                    if turn["status"] == "no_evidence":
+                        print(turn["text"], flush=True)
+                    else:
+                        print(flush=True)
+                    if turn["status"] == "incomplete":
+                        print("[incomplete] model did not finish a nonempty answer", file=sys.stderr)
             turn["audio"] = {
                 "samples": audio_samples, "sample_rate": 24000,
                 "duration_s": audio_samples / 24000,
@@ -195,12 +235,17 @@ def main():
 
     try:
         if args.audio:
-            query, audio, metadata = transcribe_file(
-                args.audio, args.asr_model, args.asr_device
-            )
-            emit("asr.final", **metadata)
-            print("[asr]", query, flush=True)
-            run_turn(query, audio=audio, asr=metadata)
+            if args.retrieve_only:
+                query, audio, metadata = transcribe_file(
+                    args.audio, args.asr_model, args.asr_device)
+                emit("asr.final", **metadata)
+                print("[asr]", query, flush=True)
+                run_turn(query, asr=metadata)
+            else:
+                import librosa
+                audio, _ = librosa.load(args.audio, sr=16000, mono=True)
+                runtime._validate_audio(audio)
+                run_turn(None, audio=audio)
         elif args.interactive:
             print("输入问题；/reset 重置模型会话，/quit 退出。知识文件每轮检查更新。", flush=True)
             while True:
@@ -230,9 +275,15 @@ def main():
         print(f"[error] {exc}", file=sys.stderr, flush=True)
         exit_code = 1
     finally:
-        runtime.close()
-        events.close()
-        write_json(out / "results.json", document)
+        try:
+            if audio_worker is not None:
+                audio_worker.close()
+        finally:
+            try:
+                runtime.close()
+            finally:
+                events.close()
+                write_json(out / "results.json", document)
     print("[saved]", out / "results.json", flush=True)
     return exit_code
 

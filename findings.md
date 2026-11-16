@@ -14,3 +14,17 @@ RAG扩展：GPU0当前空闲；现有TF-IDF与证据卡可迁移。旧ASR attent
 - 同一会话真实检索热更新：600→437 通过，WAV 独立转写的金额相符。
 - 真人文件 ASR 和检索通过，保留原音频上下文后官方模型空回答结束；状态 incomplete。
 - 新 CLI 是串行文件/文字实验入口，不是实时麦克风服务。详见 RAG_REPORT.md。
+
+## AUDIO 门控与换行（2026-11-16）
+新增 probe_audio_gate_newline.py：9组路径/换行矩阵+1组无证据控制。
+完整 AUDIO 强制监听直到注入 unit 完成、下一 AUDIO unit 释放的流程，末尾一个换行时
+输出完整证据细节；零和两个换行只泛化回答。TEXT 路径两个换行也能有效回答，
+不能断言模式切换必然 EOT。完整记录见 AUDIO_GATE_NEWLINE_REPORT.md。
+
+## 异步同卡ASR/RAG与全程AUDIO（2026-11-16）
+- 新增async_audio_rag.py，同GPU常驻Whisper后台线程/独立CUDA stream；ASR→RAG与MiniCPM owner并行。
+- 两模型同时from_pretrained首次实测meta tensor错误；启动顺序构造后并行推理通过，已补回归测试。
+- 真实CLI ASR与MiniCPM主机区间重叠0.5805秒，检索亦有重叠；自然时序回答泛化，无资料细节。
+- 延迟检索门控测试：等待2 AUDIO units、注入unit保持listen后下一unit放行，回答包含全部资料细节。
+- 全AUDIO文字入口600→437热更新、无证据拒答通过；WAV独立转写与31项测试通过。
+- 仅文件完整ASR后台执行，没有新增麦克风/partial ASR/VAD服务。详见ASYNC_AUDIO_RAG_REPORT.md。

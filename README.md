@@ -1,7 +1,9 @@
 # MiniCPM RAG：官方全双工 text_list 入口
 
-使用 MiniCPM-o 4.5 官方 `streaming_prefill(text_list=[...])` 输入检索证据与用户问题，
-通过 `streaming_generate()` 输出文字与语音。没有私有 KV cache 注入，也不修改官方模型。
+使用 MiniCPM-o 4.5 官方全双工接口，**后台 ASR/RAG 与 MiniCPM 同卡并行，应用全程保持 AUDIO**。
+检索证据与问题通过 `streaming_prefill(audio_waveform=..., text_list=[...])` 合并输入，
+注入所在 unit 保持强制监听，下一 AUDIO unit 才释放监听并生成文字与语音。
+没有独立 TEXT prefill、私有 KV cache 注入或官方模型源码修改。
 
 本仓库包含完整应用代码、知识样例、单元测试、集成测试和实验文档。
 模型权重、模型目录、运行输出、虚拟环境与缓存均不上传。
@@ -43,7 +45,17 @@ https://huggingface.co/openbmb/MiniCPM-o-4_5
 
 ## 运行
 
+音频入口需要完整本地 Whisper-small，默认放在 `models/whisper-small/`，也可通过
+`--asr-model` 指定。Whisper 和 MiniCPM 默认均常驻逻辑 `cuda:0`；启动阶段顺序加载，
+每轮推理通过后台线程和独立 CUDA stream 并行。TF-IDF 检索在后台 CPU 执行。
+
 ```bash
+# 同卡异步 ASR/RAG + AUDIO 监听和注入。
+CUDA_VISIBLE_DEVICES=0 python -u run_rag.py \
+  --audio /path/to/question.wav \
+  --model-path /path/to/MiniCPM-o-4_5 \
+  --asr-model /path/to/whisper-small --device cuda:0
+
 # 仅检索，不需要模型或 GPU。
 python run_rag.py --query '上海出差住宿能报多少' --retrieve-only
 
@@ -66,15 +78,17 @@ CUDA_VISIBLE_DEVICES=0 python -u run_rag.py \
 ## 数据流和代码
 
 ```text
-问题文本 → RAGRetriever → TF-IDF 检索/过滤 → 证据卡
-→ 独立官方 text_list unit → streaming_generate → 分块文字和 24kHz WAV
+后台 worker：完整音频 → Whisper ASR → TF-IDF RAG → Future
+MiniCPM owner：音频 AUDIO + force_listen → 等待时静音 AUDIO + force_listen
+→ AUDIO + text_list 注入，继续 listen → 下一 AUDIO unit 释放 → 分块文字/24kHz WAV
 ```
 
 | 文件 | 用途 |
 |---|---|
 | `rag_core.py` | 从原 minicpm_rag_test 迁移的检索、证据卡与引用结构 |
 | `rag_pipeline.py` | 文件校验、SHA256 热更新、弱命中过滤、无证据拒答及生成编排 |
-| `official_runtime.py` | 官方全双工 API 适配、会话管理和音频流输出 |
+| `async_audio_rag.py` | 常驻 Whisper、后台 ASR/RAG worker 和并行流水线 |
+| `official_runtime.py` | 全 AUDIO API 适配、监听门控、会话管理和音频流输出 |
 | `run_rag.py` | 可直接运行的 RAG CLI |
 | `tests/` | 检索/API/CLI 单元测试与真实 GPU 集成驱动 |
 | `run_probe.py` | 原官方入口与混合输入诊断实验，含明确标注的对照干预 |
@@ -86,28 +100,32 @@ CUDA_VISIBLE_DEVICES=0 python -u run_rag.py \
 
 ## 验证结果和边界
 
-22 项自动化测试通过。真实模型在同一会话中检索原知识回答 600 元，修改测试知识副本后
-回答 437 元；无关问题由应用层直接拒答，不调用模型。生成 WAV 的独立转写金额一致，
-但存在同音字识别误差。金额修改只是实验数据，不代表真实政策。
+**31 项自动化测试通过**。原工作区中已完成真实同 GPU 并行、检索等待门控和多轮热更新验证：
 
-**音频文件端到端生成尚未通过**：真实音频 ASR 与检索正确，但随后模型空回答结束，
-已记录为 incomplete。当前通过验证的是文本问题驱动的官方全双工生成。
-CLI 串行运行，尚未实现实时麦克风、用户打断和检索与收音并行调度。
-检索采用词面相似度，分数不是可信概率；引用标识送入的证据，不表示已验证每句回答。
+- 自然返回时序：ASR 约 0.58 秒与 MiniCPM AUDIO 处理区间重叠，检索也有重叠；模型正常回答，
+  但只是泛化应答，没有展开资料细节。
+- 受控延迟检索：等待两个 AUDIO unit、注入 unit 仍保持监听，之后回答包含全部目标资料细节。
+- 文字入口改为 AUDIO 后，同一会话 600→437 元知识热更新和无证据拒答通过。
+- 生成 WAV 的独立转写识别到资料细节和金额，存在同音字误识别。
 
-音频实验需要另备本地 Whisper-small，默认放在 `models/whisper-small/`：
+两个模型同时 `from_pretrained` 曾出现 meta tensor 错误，现已改为顺序启动构造，
+随后推理并行。该回归已加入测试。历史独立 TEXT 和音频空回答结果保留在旧报告中。
 
-```bash
-CUDA_VISIBLE_DEVICES=0 python -u run_rag.py --audio /path/to/question.wav \
-  --asr-model /path/to/whisper-small --asr-device cpu \
-  --model-path /path/to/MiniCPM-o-4_5
-```
+**模型使用证据的质量仍有格式/时序敏感性**。当前是完整音频文件后台 ASR 与 MiniCPM
+音频分块处理重叠，不是麦克风增量转写服务；尚未实现 VAD、WebSocket、用户打断或严格实时帧调度。
+独立 CUDA stream 允许同卡调度，不保证 kernel 必然同时运行。词面检索分数不是可信概率，
+引用标识送入的证据，不表示已验证每句回答。
 
-音频最多 30 秒。默认 no_evidence 为固定文字拒答，不生成 WAV。
+文件最多30秒。`--asr-device` 如显式设置必须与 `--device` 一致；不再以 CPU ASR 运行并行音频路径。
+`--retrieval-timeout 120` 设置等待超时，`--wait-unit-seconds 1` 控制静音等待 unit 间隔。
+音频无证据时保持监听并返回固定文字拒答，不生成拒答 WAV；此时 model_called=true、generation_called=false。
+文字无证据时不调用 MiniCPM。
 
 更多资料：
 
-- [RAG 实现验证记录](RAG_REPORT.md)：成功结果、失败结果和测试依据。
+- [异步同卡实现验证](ASYNC_AUDIO_RAG_REPORT.md)：最新实现、重叠时间线及真实结果。
+- [AUDIO 门控与换行对照](AUDIO_GATE_NEWLINE_REPORT.md)、[末段混合输入对照](AUDIO_TAIL_RAG_REPORT.md)。
+- [旧版 RAG 验证记录](RAG_REPORT.md)：串行/独立 TEXT 入口的历史结果。
 - [原官方入口实验说明](PROBE_README.md)及[详细报告](REPORT.md)：包含混合输入问题的对照。
 - `outputs/` 下的路径是历史运行记录位置，原始输出不随仓库上传。
 
@@ -119,10 +137,23 @@ CUDA_VISIBLE_DEVICES=0 python -u run_rag.py --audio /path/to/question.wav \
 ```bash
 python -m pytest tests test_evaluation.py -q
 # 需已准备 model/ 和空闲 GPU，固定写入 outputs/rag_integration/；已有目录会拒绝重跑。
-CUDA_VISIBLE_DEVICES=0 python -u tests/integration_rag.py
+CUDA_VISIBLE_DEVICES=0 python -u tests/integration_rag.py --output outputs/new_text_regression
+# 真实同卡并行及人为延迟检索门控，需完整 model/，输入使用自己的 WAV。
+CUDA_VISIBLE_DEVICES=0 python -u tests/integration_async_audio.py \
+  --audio /path/to/question.wav --asr-model /path/to/whisper-small
 # 从真实输出 WAV 独立转写，需要本地 Whisper-small。
 CUDA_VISIBLE_DEVICES=0 python transcribe_outputs.py \
   --results outputs/rag_integration/results.json --model /path/to/whisper-small
 ```
 
 本次发布前对整理后的仓库运行了单元测试；没有在独立发布目录重复加载权重执行 GPU 实验。
+
+末段混合输入和换行诊断脚本可显式运行：
+
+```bash
+python test_audio_tail_rag.py --audio /path/to/question.wav --asr-model /path/to/whisper-small
+python probe_audio_gate_newline.py --audio /path/to/question.wav --asr-model /path/to/whisper-small
+```
+
+两个诊断脚本固定保留各自 outputs 子目录，已有目录时拒绝覆盖；与原 run_probe.py 一样，
+包含实验对照的逻辑，不能替代正式 run_rag.py。pytest.ini 使默认测试只收集单元测试。

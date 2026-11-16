@@ -1,4 +1,6 @@
-# RAG 实现验证记录
+# RAG 实现验证记录（旧版串行入口）
+
+当前异步ASR/RAG、全程AUDIO实现见 ASYNC_AUDIO_RAG_REPORT.md 与 RAG_GUIDE.md。
 
 日期：2026-11-16。使用已有本地 MiniCPM 权重、Token2Wav、Whisper-small 和根目录
 `.venv`，未下载模型、未安装依赖。真实模型实验使用 GPU 0。
