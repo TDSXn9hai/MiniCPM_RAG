@@ -22,6 +22,7 @@ class RetrievalConfig:
     min_score: float = 0.08
     max_evidence_chars: int = 900
     min_shared_bigrams: int = 2
+    title_only: bool = False
 
     def __post_init__(self):
         if self.top_k < 1:
@@ -100,7 +101,9 @@ class RAGRetriever:
                 item.get("source", "").strip(),
             ))
         # Commit both only after parsing and indexing succeed.
-        self._knowledge_base = KnowledgeBase.from_documents(documents)
+        self._knowledge_base = KnowledgeBase.from_documents(
+            documents, title_only=self.config.title_only
+        )
         self._sha256 = digest
 
     def retrieve(self, query: str) -> RetrievalResult:
@@ -123,6 +126,7 @@ class RAGRetriever:
         hits = tuple(
             h for h in candidates
             if query_grams and len(query_grams & bigrams(
+                h.document.title if self.config.title_only else
                 h.document.title + h.document.content
             )) >= required
         )[:self.config.top_k]

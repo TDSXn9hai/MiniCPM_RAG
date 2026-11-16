@@ -52,12 +52,12 @@ class KnowledgeBase:
 
     @classmethod
     def from_documents(
-        cls, documents: Sequence[KnowledgeDocument]
+        cls, documents: Sequence[KnowledgeDocument], *, title_only: bool = False
     ) -> "KnowledgeBase":
         docs = tuple(documents)
         if not docs:
             raise ValueError("at least one document is required")
-        text = [f"{doc.title}\n{doc.content}" for doc in docs]
+        text = [doc.title if title_only else f"{doc.title}\n{doc.content}" for doc in docs]
         vectorizer = TfidfVectorizer(analyzer="char", ngram_range=(2, 4))
         matrix = vectorizer.fit_transform(text)
         return cls(docs, vectorizer, matrix)

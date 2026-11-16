@@ -1,0 +1,154 @@
+{
+  "documents": [
+    {
+      "id": "uro-squad-zh-2",
+      "title": "碧昂斯和杰伊·兹的保释捐款",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=2:context",
+      "content": "弗雷迪·格雷去世后，碧昂斯和杰伊·兹等知名人士会见了他的家人。在格雷死亡的抗议者被监禁之后，碧昂斯和杰伊-兹捐赠了数千美元来帮助他们。"
+    },
+    {
+      "id": "uro-squad-zh-12",
+      "title": "中央国企灾区捐款金额",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=12:context",
+      "content": "中央国有企业累计捐赠4860多万美元。中国石油天然气集团公司和中石化分别向灾区捐款1000万元。"
+    },
+    {
+      "id": "uro-squad-zh-15",
+      "title": "南欧较冷地区与气候",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=15:context",
+      "content": "在南欧国家的某些地区，例如在西班牙和意大利的山脉中，可以找到较凉爽的气候。此外，西班牙北海岸的大西洋气候更加湿润。"
+    },
+    {
+      "id": "uro-squad-zh-23",
+      "title": "唯物主义的定义",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=23:context",
+      "content": "唯物主义是哲学一元论的一种形式，认为物质是自然界的基本物质，一切现象，包括精神现象和意识，都与物质的相互作用是一致的。"
+    },
+    {
+      "id": "uro-squad-zh-31",
+      "title": "华沙条约与成员国重新武装",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=31:context",
+      "content": "创始成员国之一的东德被苏联允许重新武装，并成立了全国人民军作为国家武装力量，以对抗西德的重新武装。"
+    },
+    {
+      "id": "uro-squad-zh-33",
+      "title": "纽约曲棍球队介绍",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=33:context",
+      "content": "纽约岛民和纽约游骑兵代表纽约参加全国曲棍球联赛。在大都市区内还有新泽西魔鬼队，他们在附近的新泽西州纽瓦克打球。"
+    },
+    {
+      "id": "uro-squad-zh-34",
+      "title": "马来西亚理工学院数量",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=34:context",
+      "content": "目前，马来西亚已在全国发展了32所理工学院，涉及工程、农业、商业、酒店和设计课程，2009年有60840名学生，2012年有87440名学生。"
+    },
+    {
+      "id": "uro-squad-zh-39",
+      "title": "Lady Gaga演唱曲目",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=39:context",
+      "content": "六届格莱美奖得主、奥斯卡奖提名人Lady Gaga演唱国歌，奥斯卡奖得主Marlee Matlin提供美国手语（ASL）翻译。"
+    },
+    {
+      "id": "uro-squad-zh-41",
+      "title": "纽约市重轨交通建设工程",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=41:context",
+      "content": "纽约市正在建设的耗资数十亿美元的重轨交通项目包括第二大道地铁、东侧通道项目和7号地铁延长线。"
+    },
+    {
+      "id": "uro-squad-zh-48",
+      "title": "埃菲尔铁塔悬挂物与抗议活动",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=48:context",
+      "content": "无国界记者组织了几次象征性的抗议活动，包括爬上埃菲尔铁塔悬挂抗议横幅，以及在圣母院大教堂悬挂同样的横幅。"
+    },
+    {
+      "id": "uro-squad-zh-57",
+      "title": "工业革命与中产阶级消费品价格",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=57:context",
+      "content": "与此同时，工业革命为大规模生产和消费打开了大门。随着装饰产品在昂贵的工艺范围内，在机器生产下变得更便宜，美学成为中产阶级的标准。"
+    },
+    {
+      "id": "uro-squad-zh-58",
+      "title": "室内设计的关键部分与照明",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=58:context",
+      "content": "室内照明通常是用灯具来完成的，是室内设计的关键部分。照明也可以是景观项目的内在组成部分。"
+    },
+    {
+      "id": "uro-squad-zh-60",
+      "title": "工程师调查发现与建筑抗震原因",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=60:context",
+      "content": "在灾难发生后的几天里，一支由工程师组成的国际侦察队被派往该地区，对受损建筑物进行详细的初步调查。他们的发现表明了许多建筑无法抵御地震的各种原因。"
+    },
+    {
+      "id": "uro-squad-zh-69",
+      "title": "肯尼迪提议美苏联手登月的时间",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=69:context",
+      "content": "1963年9月20日，肯尼迪总统在联合国大会上发表讲话，提议美苏联手登月。苏联总理赫鲁晓夫最初拒绝了肯尼迪的提议。"
+    },
+    {
+      "id": "uro-squad-zh-71",
+      "title": "思想流派是否属于宗教的争议",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=71:context",
+      "content": "关于佛教是否应被视为一种宗教的问题，存在着不同的意见。许多资料通常把佛教称为一种宗教。例如："
+    },
+    {
+      "id": "uro-squad-zh-77",
+      "title": "比赛投票结果显示与公布时间",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=77:context",
+      "content": "在前11周，由于与参赛者的电话号码混淆，投票在通常的结果之夜进行，结果公布推迟到第二天晚上。"
+    },
+    {
+      "id": "uro-squad-zh-79",
+      "title": "策划抗议活动的组织",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=79:context",
+      "content": "无国界记者组织了几次象征性的抗议活动，包括爬上埃菲尔铁塔悬挂抗议横幅，以及在圣母院大教堂悬挂同样的横幅。"
+    },
+    {
+      "id": "uro-squad-zh-82",
+      "title": "狗与人类相同的健康问题",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=82:context",
+      "content": "狗也容易受到一些与人类相同的健康状况的影响，包括糖尿病、牙科和心脏病、癫痫、癌症、甲状腺功能减退和关节炎。"
+    },
+    {
+      "id": "uro-squad-zh-85",
+      "title": "美国偶像慈善筹款特别节目",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=85:context",
+      "content": "《偶像回馈》是第六季开始的一项特别慈善活动，由名人表演和各种筹款活动组成。这项活动也在第七季和第九季举行，总共筹集了近185万美元。"
+    },
+    {
+      "id": "uro-squad-zh-92",
+      "title": "哈利法担任总理的国家",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=92:context",
+      "content": "巴林总理谢赫·哈利法赫·本·苏尔曼·阿勒哈利法赫自1970年就任总理，成为任职时间最长的非民选总理。"
+    },
+    {
+      "id": "uro-squad-zh-93",
+      "title": "儿童节日期与纪念活动",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=93:context",
+      "content": "在2008年6月1日的儿童节，许多家长到学校的废墟中为他们的孩子哀悼。幸存的孩子们大多生活在救援中心，他们举行了纪念这一特殊日子的仪式，但也承认了地震。"
+    },
+    {
+      "id": "uro-squad-zh-97",
+      "title": "现代建筑师的哲学思想",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=97:context",
+      "content": "影响现代建筑师及其建筑设计方法的哲学有理性主义、经验主义、结构主义、后结构主义和现象学。"
+    },
+    {
+      "id": "uro-squad-zh-138",
+      "title": "美国偶像第一季后退出的主持人",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=138:context",
+      "content": "第一季由瑞安·西克雷斯特和布莱恩·邓克尔曼共同主持。邓克曼随后辞职，从第二季开始，海克雷斯特成为该剧唯一的主持人。"
+    },
+    {
+      "id": "uro-squad-zh-141",
+      "title": "完整戒律列表与条目拆分",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=141:context",
+      "content": "十戒的完整清单，外行可以短期遵守。在完整的清单中，第七条箴言分为两条，第十条加上："
+    },
+    {
+      "id": "uro-squad-zh-153",
+      "title": "共和国日游行举办大道",
+      "source": "URO-Bench-mini/basic/SQuAD-zh/id=153:context",
+      "content": "拉杰帕斯是印度共和国位于新德里的一条礼仪大道，它的修建与巴黎的香榭丽舍大街相似。一年一度的共和国日游行于1月26日在这里举行。"
+    }
+  ]
+}
