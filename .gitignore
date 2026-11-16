@@ -1,0 +1,17 @@
+/model/
+/models/
+/outputs/
+/.venv/
+/venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.log
+.env
+.env.*
