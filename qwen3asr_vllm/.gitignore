@@ -1,0 +1,13 @@
+/site-packages/
+/isolated_vllm013/
+/isolated_vllm014_torch291/
+/local/
+/lib/
+/bin/python
+/bin/python3
+/bin/python3.10
+/bin/pip
+/bin/pip3
+/bin/pip3.10
+/pyvenv.cfg
+__pycache__/

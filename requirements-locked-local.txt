@@ -1,0 +1,9 @@
+# MiniCPM environment validated with the workspace cu128 CUDA stack.
+torch==2.8.0+cu128
+transformers==4.51.0
+accelerate==1.12.0
+librosa==0.11.0
+soundfile==0.12.1
+numpy==2.2.6
+scikit-learn==1.7.2
+pytest==9.2.0

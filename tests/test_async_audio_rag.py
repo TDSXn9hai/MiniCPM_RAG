@@ -218,3 +218,63 @@ def test_api_rejects_different_asr_and_minicpm_devices(tmp_path):
     finally:
         worker.close()
         runtime.close()
+
+
+def test_qwen3_streaming_asr_sends_chunks_and_retrieves_only_final(tmp_path):
+    from async_audio_rag import Qwen3ASRStreaming
+
+    class Backend:
+        def __init__(self):
+            self.calls = []
+        def init_streaming_state(self, **kwargs):
+            self.calls.append(("init", kwargs))
+            return {"state": True}
+        def streaming_transcribe(self, audio, state):
+            self.calls.append(("chunk", len(audio), state))
+            return f"partial-{len(self.calls)}"
+        def finish_streaming_transcribe(self, state):
+            self.calls.append(("finish", state))
+            return "最终问题"
+
+    backend = Backend()
+    asr = Qwen3ASRStreaming(backend, chunk_size_sec=1.0)
+    text, metadata = asr.transcribe(np.zeros(2 * 16000 + 100, np.float32))
+    assert text == "最终问题"
+    assert metadata["partial_updates"] == 3
+    assert [call[0] for call in backend.calls] == [
+        "init", "chunk", "chunk", "chunk", "finish"
+    ]
+    assert backend.calls[0][1]["unfixed_chunk_num"] == 2
+    assert backend.calls[0][1]["unfixed_token_num"] == 5
+
+
+def test_qwen3_streaming_requires_cuda(tmp_path):
+    from async_audio_rag import Qwen3ASRStreaming
+    with pytest.raises(ValueError, match="CUDA"):
+        Qwen3ASRStreaming(object(), device="cpu")
+
+
+def test_qwen3_streaming_reads_text_from_official_state_objects():
+    from async_audio_rag import Qwen3ASRStreaming
+
+    class State:
+        def __init__(self, text):
+            self.text = text
+
+    class Backend:
+        def init_streaming_state(self, **kwargs):
+            return State("")
+
+        def streaming_transcribe(self, audio, state):
+            state.text = "部分"
+            return state
+
+        def finish_streaming_transcribe(self, state):
+            state.text = "最终问题"
+            return state
+
+    text, metadata = Qwen3ASRStreaming(
+        Backend(), chunk_size_sec=1.0
+    ).transcribe(np.zeros(16000, np.float32))
+    assert text == "最终问题"
+    assert metadata["last_partial"] == "部分"

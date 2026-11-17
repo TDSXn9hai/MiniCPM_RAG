@@ -141,3 +141,41 @@ async_audio_rag.py、official_runtime.py、rag_pipeline.py 和音频流水线测
 
 旧报告记录的是当时实现，本节更新覆盖其中“音频无证据不生成”的历史描述。
 本次验证为单元测试及编译检查，没有重新运行真实GPU生成实验。
+
+
+## Qwen3-ASR HTTP backend
+
+`Qwen3ASRStreaming` 可以注入 `Qwen3ASRHTTPBackend`。该 backend 连接 Qwen 官方
+streaming Flask 服务的 `/api/start`、`/api/chunk`、`/api/finish`：
+
+```python
+from async_audio_rag import (
+    ASRRetrievalWorker,
+    Qwen3ASRHTTPBackend,
+    Qwen3ASRStreaming,
+)
+
+qwen = Qwen3ASRStreaming(
+    Qwen3ASRHTTPBackend("http://127.0.0.1:18180"),
+    language="Chinese",
+    chunk_size_sec=2.0,
+    device="cuda:0",
+)
+worker = ASRRetrievalWorker(qwen, retriever)
+```
+
+CLI：
+
+```bash
+python -u run_rag.py \
+  --audio /path/to/question.wav \
+  --asr-backend qwen-http \
+  --qwen-asr-url http://127.0.0.1:18180 \
+  --asr-chunk-seconds 2.0 \
+  --device cuda:0
+```
+
+适配器会保存最后一个 partial，但只在 final transcript 返回后执行一次
+`RAGRetriever.retrieve(query)`。这与 partial 实时检索不同，可避免同一句话在
+逐块修正过程中反复检索。`--asr-backend` 默认仍为 `whisper`。
+Qwen 服务版本和启动方法见 [QWEN3ASR_ENVIRONMENT.md](QWEN3ASR_ENVIRONMENT.md)。

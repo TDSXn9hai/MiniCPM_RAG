@@ -1,10 +1,9 @@
 -r requirements-retrieval.txt
-# Install a CUDA-compatible PyTorch build for your system.
-torch==2.8.0
 transformers==4.51.0
-accelerate==1.12.0
-safetensors>=0.7.0
-minicpmo-utils[all]==1.0.6
-librosa==0.11.0
-soundfile==0.12.1
-einops==0.8.1
+accelerate>=1.12,<2
+safetensors>=0.7
+librosa>=0.11,<1
+soundfile>=0.12,<1
+einops>=0.8,<1
+minicpmo-utils[all]>=1.0.5
+httpx>=0.28,<1

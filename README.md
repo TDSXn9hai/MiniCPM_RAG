@@ -178,3 +178,27 @@ async_audio_rag.py、official_runtime.py、rag_pipeline.py 和音频流水线测
 
 旧报告记录的是当时实现，本节更新覆盖其中“音频无证据不生成”的历史描述。
 本次验证为单元测试及编译检查，没有重新运行真实GPU生成实验。
+
+
+## Qwen3-ASR 流式服务与 final-only RAG
+
+新增 `Qwen3ASRStreaming` 和 `Qwen3ASRHTTPBackend`。音频按约 2 秒分块发送到 Qwen 官方
+streaming API（`/api/start`、`/api/chunk`、`/api/finish`），partial 文本只记录；
+只有 final transcript 才进入 RAG，避免 partial 抖动造成重复检索。
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -u run_rag.py \
+  --audio /path/to/question.wav \
+  --asr-backend qwen-http \
+  --qwen-asr-url http://127.0.0.1:18180 \
+  --device cuda:0
+```
+
+实测组合为 Qwen3-ASR-1.7B、vLLM 0.14.0、Torch 2.9.1+cu128 和
+Transformers 4.57.6。13.7 秒示例音频识别为
+“当出现《植物大战僵尸》的时候，提醒我。”，vLLM 推理约 0.93 秒。
+
+真实 HTTP ASR 结果已完成 RAG 命中，并在测试 runtime 中产生
+`asr.final → retrieval.result → rag.injected` 事件；注入使用静音 AUDIO +
+`text_list`，注入 unit 保持 `force_listen`。自动化测试增至 35 项。
+环境、版本兼容矩阵和启动命令见 [QWEN3ASR_ENVIRONMENT.md](QWEN3ASR_ENVIRONMENT.md)。

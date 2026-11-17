@@ -15,7 +15,13 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-from async_audio_rag import ASRRetrievalWorker, AsyncAudioRAGPipeline, LocalWhisperASR
+from async_audio_rag import (
+    ASRRetrievalWorker,
+    AsyncAudioRAGPipeline,
+    LocalWhisperASR,
+    Qwen3ASRHTTPBackend,
+    Qwen3ASRStreaming,
+)
 from official_runtime import OfficialDuplexRuntime
 from rag_pipeline import RAGPipeline, RAGRetriever, RetrievalConfig
 
@@ -86,6 +92,13 @@ def main():
     parser.add_argument("--model-path", type=Path, default=ROOT / "model")
     parser.add_argument("--ref-audio", type=Path, default=ROOT / "assets/ref_audio.wav")
     parser.add_argument("--asr-model", type=Path, default=ROOT / "models/whisper-small")
+    parser.add_argument(
+        "--asr-backend", choices=("whisper", "qwen-http"), default="whisper",
+        help="use local Whisper or the official Qwen3-ASR streaming HTTP service",
+    )
+    parser.add_argument("--qwen-asr-url", default="http://127.0.0.1:18180")
+    parser.add_argument("--asr-timeout", type=float, default=120.0)
+    parser.add_argument("--asr-chunk-seconds", type=float, default=2.0)
     parser.add_argument("--device", default="cuda:0", help="logical CUDA device for both resident models")
     parser.add_argument("--asr-device", default=None, help="must match --device for parallel audio")
     parser.add_argument("--retrieval-timeout", type=float, default=120.0)
@@ -103,6 +116,8 @@ def main():
         parser.error("parallel audio ASR and MiniCPM must use the same --device")
     if args.retrieval_timeout <= 0 or args.wait_unit_seconds <= 0:
         parser.error("retrieval timeout and wait unit interval must be positive")
+    if args.asr_timeout <= 0 or args.asr_chunk_seconds <= 0:
+        parser.error("ASR timeout and chunk size must be positive")
     try:
         config = RetrievalConfig(
             args.top_k, args.min_score, args.max_evidence_chars, args.min_shared_bigrams,
@@ -123,7 +138,15 @@ def main():
     audio_worker = None
     audio_pipeline = None
     if args.audio and not args.retrieve_only:
-        audio_worker = ASRRetrievalWorker(LocalWhisperASR(args.asr_model, args.device), retriever)
+        if args.asr_backend == "qwen-http":
+            asr = Qwen3ASRStreaming(
+                Qwen3ASRHTTPBackend(args.qwen_asr_url, timeout_s=args.asr_timeout),
+                device=args.asr_device,
+                chunk_size_sec=args.asr_chunk_seconds,
+            )
+        else:
+            asr = LocalWhisperASR(args.asr_model, args.asr_device)
+        audio_worker = ASRRetrievalWorker(asr, retriever)
         audio_pipeline = AsyncAudioRAGPipeline(
             audio_worker, runtime, timeout_s=args.retrieval_timeout,
             wait_unit_s=args.wait_unit_seconds)
@@ -134,6 +157,8 @@ def main():
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "model_load_s": None, "cases": [],
         "device": args.device, "asr_device": args.asr_device,
+        "asr_backend": args.asr_backend,
+        "qwen_asr_url": args.qwen_asr_url if args.asr_backend == "qwen-http" else None,
         "audio_mode_only": True, "parallel_audio_backend": audio_pipeline is not None,
     }
     write_json(out / "results.json", document)

@@ -68,6 +68,150 @@ class LocalWhisperASR:
         gc.collect()
 
 
+class Qwen3ASRStreaming:
+    """Adapter for the official Qwen3-ASR vLLM streaming state API.
+
+    The backend object is intentionally injectable so the orchestration can be
+    tested without downloading Qwen weights or starting vLLM.  It must expose:
+    ``init_streaming_state``, ``streaming_transcribe`` and
+    ``finish_streaming_transcribe``.
+    """
+
+    def __init__(self, backend, *, language="Chinese", chunk_size_sec=2.0,
+                 unfixed_chunk_num=2, unfixed_token_num=5, device="cuda:0"):
+        if not device.startswith("cuda:"):
+            raise ValueError("Qwen3-ASR streaming requires a CUDA device")
+        if chunk_size_sec <= 0:
+            raise ValueError("chunk_size_sec must be positive")
+        self.backend = backend
+        self.device = device
+        self.language = language
+        self.chunk_size_sec = chunk_size_sec
+        self.unfixed_chunk_num = unfixed_chunk_num
+        self.unfixed_token_num = unfixed_token_num
+        self.state = None
+
+    def prepare(self):
+        prepare = getattr(self.backend, "prepare", None)
+        if prepare is not None:
+            prepare()
+
+    def transcribe_stream(self, audio):
+        if self.state is None:
+            self.state = self.backend.init_streaming_state(
+                context="", language=self.language,
+                unfixed_chunk_num=self.unfixed_chunk_num,
+                unfixed_token_num=self.unfixed_token_num,
+                chunk_size_sec=self.chunk_size_sec,
+            )
+        audio = np.asarray(audio, np.float32)
+        step = max(1, int(self.chunk_size_sec * 16000))
+        partials = []
+        started = time.perf_counter()
+        for offset in range(0, len(audio), step):
+            update = self.backend.streaming_transcribe(
+                audio[offset:offset + step], self.state
+            )
+            if update:
+                partials.append(self._result_text(update))
+        final = self.backend.finish_streaming_transcribe(self.state)
+        text = self._result_text(final)
+        if not text:
+            raise ValueError("Qwen3-ASR returned an empty final transcript")
+        return text, {
+            "backend": "qwen3-asr-vllm-streaming",
+            "device": self.device,
+            "chunk_size_sec": self.chunk_size_sec,
+            "partial_updates": len(partials),
+            "last_partial": partials[-1] if partials else "",
+            "wall_s": time.perf_counter() - started,
+        }
+
+    def transcribe(self, audio):
+        return self.transcribe_stream(audio)
+
+    def close(self):
+        self.state = None
+        close = getattr(self.backend, "close", None)
+        if close:
+            close()
+
+    @staticmethod
+    def _result_text(result):
+        if result is None:
+            return ""
+        if isinstance(result, str):
+            return result.strip()
+        if isinstance(result, dict):
+            return str(result.get("text", "")).strip()
+        return str(getattr(result, "text", "")).strip()
+
+
+class Qwen3ASRHTTPBackend:
+    """Client for the official Qwen3-ASR streaming Flask API."""
+
+    def __init__(self, base_url, *, timeout_s=120.0):
+        if timeout_s <= 0:
+            raise ValueError("ASR HTTP timeout must be positive")
+        import httpx
+
+        self.base_url = str(base_url).rstrip("/")
+        self.timeout_s = float(timeout_s)
+        self._client = httpx.Client(base_url=self.base_url, timeout=self.timeout_s)
+
+    def _raise(self, response):
+        try:
+            response.raise_for_status()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Qwen3-ASR service returned HTTP {response.status_code}: "
+                f"{response.text[:500]}"
+            ) from exc
+        return response.json()
+
+    def prepare(self):
+        response = self._client.get("/")
+        try:
+            response.raise_for_status()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Qwen3-ASR service health check failed with HTTP "
+                f"{response.status_code}"
+            ) from exc
+
+    def init_streaming_state(
+        self, *, context="", language="Chinese", unfixed_chunk_num=2,
+        unfixed_token_num=5, chunk_size_sec=2.0,
+    ):
+        # The packaged Qwen demo accepts session creation without query
+        # parameters. Keep the adapter signature explicit so a stricter
+        # service can add language/context handling without changing callers.
+        del context, language, unfixed_chunk_num, unfixed_token_num, chunk_size_sec
+        return self._raise(self._client.post("/api/start"))
+
+    def streaming_transcribe(self, audio, state):
+        audio = np.asarray(audio, np.float32)
+        payload = self._raise(self._client.post(
+            "/api/chunk",
+            params={"session_id": state["session_id"]},
+            content=audio.tobytes(),
+            headers={"Content-Type": "application/octet-stream"},
+        ))
+        state.update(payload)
+        return payload
+
+    def finish_streaming_transcribe(self, state):
+        payload = self._raise(self._client.post(
+            "/api/finish",
+            params={"session_id": state["session_id"]},
+        ))
+        state.update(payload)
+        return payload
+
+    def close(self):
+        self._client.close()
+
+
 class ASRRetrievalWorker:
     """Dependent ASR→retrieval tasks run off the MiniCPM owner thread."""
 

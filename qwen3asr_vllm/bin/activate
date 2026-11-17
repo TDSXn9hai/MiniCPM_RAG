@@ -1,0 +1,6 @@
+# Shell helper for the validated vLLM 0.14 / Torch 2.9.1 environment.
+QWEN3ASR_ROOT="$PWD/qwen3asr_vllm"
+export QWEN3ASR_ENV="$QWEN3ASR_ROOT/isolated_vllm014_torch291"
+export PATH="$QWEN3ASR_ENV/bin:$PATH"
+export PYTHONPATH="$QWEN3ASR_ENV/deps:$QWEN3ASR_ENV/site-packages:$QWEN3ASR_ROOT/site-packages:$PWD/.venv/lib/python3.10/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+export LD_LIBRARY_PATH="$QWEN3ASR_ENV/site-packages/nvidia/nccl/lib:$QWEN3ASR_ENV/site-packages/nvidia/nvjitlink/lib:$QWEN3ASR_ENV/site-packages/nvidia/cusparselt/lib:$QWEN3ASR_ENV/site-packages/nvidia/nvshmem/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

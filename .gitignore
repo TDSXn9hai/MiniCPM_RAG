@@ -15,3 +15,12 @@ __pycache__/
 *.log
 .env
 .env.*
+
+/qwen3asr_vllm/site-packages/
+/qwen3asr_vllm/isolated_vllm013/
+/qwen3asr_vllm/isolated_vllm014_torch291/
+/qwen3asr_vllm/local/
+/qwen3asr_vllm/lib/
+/qwen3asr_vllm/bin/python
+/qwen3asr_vllm/bin/pip
+/qwen3asr_vllm/pyvenv.cfg

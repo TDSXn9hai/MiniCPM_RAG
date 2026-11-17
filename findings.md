@@ -28,3 +28,9 @@ RAG扩展：GPU0当前空闲；现有TF-IDF与证据卡可迁移。旧ASR attent
 - 延迟检索门控测试：等待2 AUDIO units、注入unit保持listen后下一unit放行，回答包含全部资料细节。
 - 全AUDIO文字入口600→437热更新、无证据拒答通过；WAV独立转写与31项测试通过。
 - 仅文件完整ASR后台执行，没有新增麦克风/partial ASR/VAD服务。详见ASYNC_AUDIO_RAG_REPORT.md。
+
+## Qwen3-ASR流式HTTP与RAG（2026-11-17）
+- Qwen3-ASR-1.7B在vLLM 0.14.0+Torch 2.9.1+cu128环境完成真实GPU推理。
+- 官方流式API按2秒音频块返回partial，适配器只在final transcript后触发一次RAG。
+- 真实服务final命中plant-zombies，并完成AUDIO `text_list`+force_listen注入状态机验证。
+- 当前入口仍是文件/缓冲区分块ASR；没有新增麦克风实时采集、partial检索或VAD服务。

@@ -98,3 +98,22 @@ tests/integration_rag.py 新增 --output 参数，保留旧输出不覆盖。
 当前入口仍是音频文件 CLI：后台使用完整已读文件做 ASR，MiniCPM 同时分块处理该音频。
 没有新增实时麦克风采集、partial ASR、VAD触发、WebSocket、用户打断或严格实时帧调度。
 不把文件回放的处理重叠宣称为这些服务已经实现。模型输出对注入格式/时序的敏感性仍存在。
+
+## Qwen3-ASR vLLM 真实服务验证（2026-11-17）
+
+后续已在独立环境完成 Qwen3-ASR-1.7B 的真实 vLLM 推理：
+
+- vLLM 0.14.0 + Torch 2.9.1+cu128 + Transformers 4.57.6。
+- 官方 `/api/start`、`/api/chunk`、`/api/finish` 流式服务可用。
+- 13.7 秒示例音频 final transcript 为
+  “当出现《植物大战僵尸》的时候，提醒我。”，vLLM 推理约 0.93 秒。
+- `Qwen3ASRHTTPBackend` 已接入 `Qwen3ASRStreaming`；final transcript 命中
+  `plant-zombies`，并在测试 runtime 中完成
+  `asr.final → retrieval.result → rag.injected`。
+- 注入使用 AUDIO `audio_waveform` + `text_list`，注入 unit 保持 `force_listen`，
+  注入文本包含证据并保留末尾单个换行。
+
+vLLM 0.11 缺少 Qwen3-ASR 自定义架构，0.13 缺少 0.14 backend 模块；
+0.14 与 Torch 2.8 组合会因二进制 ABI 不匹配在加载 `_C` 时触发
+`std::bad_alloc`。可运行环境、权重和独立验证入口见
+[QWEN3ASR_ENVIRONMENT.md](QWEN3ASR_ENVIRONMENT.md)。
