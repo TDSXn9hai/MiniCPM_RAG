@@ -208,6 +208,20 @@ class Qwen3ASRHTTPBackend:
         state.update(payload)
         return payload
 
+    def cancel_streaming_transcribe(self, state):
+        """Best-effort server-side cleanup for a canceled live ASR turn."""
+        session_id = state.get("session_id") if isinstance(state, dict) else None
+        if not session_id:
+            return
+        try:
+            self._client.post(
+                "/api/finish",
+                params={"session_id": session_id},
+                timeout=5.0,
+            )
+        except Exception:
+            pass
+
     def close(self):
         self._client.close()
 

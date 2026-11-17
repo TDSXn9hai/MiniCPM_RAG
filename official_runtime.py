@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from concurrent.futures import wait
+from concurrent.futures import CancelledError, wait
 import threading
 import gc
 import os
 from pathlib import Path
+from queue import Empty
 import random
 import time
 
@@ -208,6 +209,71 @@ class OfficialDuplexRuntime:
             if audio is not None:
                 self._listen_audio(audio)
             for chunk in self._stream_response(build_rag_prompt(query, evidence)):
+                complete[0] = chunk["end_of_turn"]
+                yield chunk
+
+    def stream_live_answer(
+        self, *, audio_queue, retrieval_future, cancel_event, on_ready,
+        on_event=None, timeout_s=120.0, wait_unit_s=1.0,
+    ):
+        """Listen to live 1-second units, then inject the final RAG result."""
+        if timeout_s <= 0 or wait_unit_s <= 0:
+            raise ValueError("timeout and wait unit interval must be positive")
+        with self._turn() as complete:
+            self._prepare()
+            while True:
+                if cancel_event.is_set():
+                    raise CancelledError()
+                try:
+                    audio = audio_queue.get(timeout=0.25)
+                except Empty:
+                    continue
+                if audio is None:
+                    break
+                audio = np.asarray(audio, np.float32).reshape(-1)
+                if audio.size == 0:
+                    continue
+                if audio.size > 16000:
+                    raise ValueError("live AUDIO units must be at most one second")
+                if not np.isfinite(audio).all():
+                    raise ValueError("live AUDIO units must contain finite samples")
+                if audio.size < 16000:
+                    audio = np.pad(audio, (0, 16000 - audio.size))
+                self._listen_unit(
+                    audio.astype(np.float32, copy=False),
+                    phase="input",
+                    on_event=on_event,
+                )
+
+            deadline = time.perf_counter() + timeout_s
+            while not retrieval_future.done():
+                if cancel_event.is_set():
+                    raise CancelledError()
+                remaining = deadline - time.perf_counter()
+                if remaining <= 0:
+                    raise TimeoutError("ASR/retrieval timed out while listening")
+                started = time.perf_counter()
+                self._listen_unit(
+                    np.zeros(16000, np.float32),
+                    phase="waiting",
+                    on_event=on_event,
+                )
+                remaining = min(
+                    deadline - time.perf_counter(),
+                    wait_unit_s - (time.perf_counter() - started),
+                )
+                if remaining > 0:
+                    wait([retrieval_future], timeout=remaining)
+
+            if cancel_event.is_set():
+                raise CancelledError()
+            prepared = retrieval_future.result()
+            on_ready(prepared)
+            retrieval = getattr(prepared, "retrieval", prepared)
+            prompt = build_rag_prompt(
+                retrieval.query, retrieval.evidence.text
+            )
+            for chunk in self._stream_response(prompt, on_event=on_event):
                 complete[0] = chunk["end_of_turn"]
                 yield chunk
 

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>语音 RAG 运行控制台</title>
+  <link rel="stylesheet" href="/static/console/console.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <h1>语音 RAG 运行台</h1>
+        <p><span id="knowledgeName">squad_zh_25.json</span> · 1 秒 PCM · 全文检索</p>
+      </div>
+    </div>
+    <div class="tuning">
+      <label>模式
+        <select id="retrievalMode">
+          <option value="full">全文</option>
+          <option value="title">仅标题</option>
+        </select>
+      </label>
+      <label>Top K
+        <input id="topKInput" type="number" min="1" max="10" value="3">
+      </label>
+      <label>最低分
+        <input id="minScoreInput" type="number" min="0" max="1" step="0.01" value="0.08">
+      </label>
+    </div>
+    <div class="top-actions">
+      <span id="connectionState" class="status-pill waiting">正在连接</span>
+      <button id="resetButton" class="quiet-button" type="button">重置会话</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="stage-panel panel">
+      <div class="panel-head">
+        <span>链路状态</span>
+        <span id="turnClock">00.0s</span>
+      </div>
+      <div id="stageRail" class="stage-rail">
+        <div class="stage" data-stage="mic">
+          <span class="stage-light"></span>
+          <span><strong>麦克风采集</strong><small>16 kHz float32</small></span>
+          <em>待机</em>
+        </div>
+        <div class="stage" data-stage="asr">
+          <span class="stage-light"></span>
+          <span><strong>Qwen 流式 ASR</strong><small>1 秒 PCM / partial</small></span>
+          <em>等待</em>
+        </div>
+        <div class="stage" data-stage="retrieval">
+          <span class="stage-light"></span>
+          <span><strong>TF-IDF 检索</strong><small>预检索 / 权威检索</small></span>
+          <em>等待</em>
+        </div>
+        <div class="stage" data-stage="injection">
+          <span class="stage-light"></span>
+          <span><strong>AUDIO 证据注入</strong><small>静音 + force listen</small></span>
+          <em>等待</em>
+        </div>
+        <div class="stage" data-stage="model">
+          <span class="stage-light"></span>
+          <span><strong>MiniCPM 生成</strong><small>文本与 24 kHz PCM</small></span>
+          <em>等待</em>
+        </div>
+      </div>
+
+      <div class="meter-wrap">
+        <div class="meter-label"><span>输入电平</span><span id="recordTime">00.0s</span></div>
+        <div class="meter"><span id="levelBar"></span></div>
+      </div>
+
+      <button id="micButton" class="mic-button" type="button" disabled>
+        <span class="mic-dot"></span>
+        <span class="mic-copy">
+          <strong>按住说话</strong>
+          <small>松开后完成检索与回答</small>
+        </span>
+      </button>
+    </aside>
+
+    <section class="conversation panel">
+      <div class="panel-head">
+        <span>本轮问答</span>
+        <span id="turnId">尚未开始</span>
+      </div>
+      <div class="question-block">
+        <span class="eyebrow">识别问题</span>
+        <div id="transcriptText" class="question-text">按住麦克风按钮开始提问</div>
+        <div id="partialTag" class="partial-tag" hidden>partial</div>
+      </div>
+
+      <div class="answer-block">
+        <span class="eyebrow">MiniCPM 回复</span>
+        <p id="answerText" class="answer-text" aria-live="polite"></p>
+      </div>
+
+      <div class="audio-row">
+        <button id="replayButton" class="play-button" type="button" disabled>▶</button>
+        <div class="mini-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <span id="audioState">等待回答</span>
+      </div>
+
+      <div class="metric-strip">
+        <div><strong id="metricPartial">—</strong><span>首个 partial</span></div>
+        <div><strong id="metricAsr">—</strong><span>ASR final</span></div>
+        <div><strong id="metricRetrieval">—</strong><span>权威检索</span></div>
+        <div><strong id="metricFirstText">—</strong><span>首段文本</span></div>
+        <div><strong id="metricFirstAudio">—</strong><span>首段音频</span></div>
+        <div><strong id="metricTotal">—</strong><span>总耗时</span></div>
+      </div>
+    </section>
+
+    <aside class="evidence-panel panel">
+      <div class="panel-head">
+        <span>检索证据</span>
+        <span id="retrievalState">尚未检索</span>
+      </div>
+      <div id="evidenceList" class="evidence-list">
+        <div class="empty-state">
+          <strong>等待问题</strong>
+          <p>命中文档、分数和实际注入的证据会显示在这里。</p>
+        </div>
+      </div>
+    </aside>
+
+    <details id="latencyPanel" class="latency-panel panel">
+      <summary>
+        <span>阶段时延追踪</span>
+        <span id="latencySummary">展开查看本轮时间线</span>
+      </summary>
+      <div class="latency-grid">
+        <div class="timeline">
+          <div class="axis"><span style="left:0%">0</span><span style="left:25%">25%</span><span style="left:50%">50%</span><span style="left:75%">75%</span><span style="left:100%">结束</span></div>
+          <div class="trace-row" data-trace="asr"><span>ASR</span><i><b></b></i><em>—</em></div>
+          <div class="trace-row" data-trace="retrieval"><span>检索</span><i><b></b></i><em>—</em></div>
+          <div class="trace-row" data-trace="injection"><span>注入</span><i><b></b></i><em>—</em></div>
+          <div class="trace-row" data-trace="model"><span>生成</span><i><b></b></i><em>—</em></div>
+          <div class="trace-row" data-trace="audio"><span>音频</span><i><b></b></i><em>—</em></div>
+        </div>
+        <div class="event-log" id="eventLog">
+          <div class="empty-state compact">事件将在这里按到达顺序追加。</div>
+        </div>
+      </div>
+      <div class="history">
+        <div class="panel-head"><span>最近轮次</span><span>浏览器内存中保留 10 轮</span></div>
+        <div id="historyList" class="history-list">
+          <div class="empty-state compact">完成一轮后显示 ASR、检索、注入和总耗时。</div>
+        </div>
+      </div>
+    </details>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="/static/console/console.js"></script>
+</body>
+</html>

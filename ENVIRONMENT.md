@@ -36,3 +36,18 @@ Qwen3-ASR-1.7B 权重加载、流式 HTTP 服务及 final transcript RAG 检索�
 完整版本矩阵、启动命令、已验证输出和当前运行边界见
 [QWEN3ASR_ENVIRONMENT.md](QWEN3ASR_ENVIRONMENT.md)。模型权重和整个 Qwen
 虚拟环境不随仓库上传。
+
+## 流式语音 RAG 控制台
+
+`.venv` 额外安装 `requirements-console.txt`：
+
+```bash
+uv pip install --python .venv/bin/python -r requirements-console.txt
+```
+
+控制台使用 FastAPI/uvicorn WebSocket、AudioWorklet 和 Web Audio API。
+输入 PCM 固定为 16 kHz mono float32，每块 16000 samples（1 秒）；
+输出为 24 kHz mono float32 PCM。输入和输出音频都不写盘。
+
+Qwen ASR HTTP 服务继续使用独立 `.venv-qwen`，控制台主进程使用 `.venv`。
+两个进程建议放在不同 GPU 上，并通过 `--qwen-asr-url` 连接。

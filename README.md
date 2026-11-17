@@ -202,3 +202,67 @@ Transformers 4.57.6。13.7 秒示例音频识别为
 `asr.final → retrieval.result → rag.injected` 事件；注入使用静音 AUDIO +
 `text_list`，注入 unit 保持 `force_listen`。自动化测试增至 35 项。
 环境、版本兼容矩阵和启动命令见 [QWEN3ASR_ENVIRONMENT.md](QWEN3ASR_ENVIRONMENT.md)。
+
+## 流式语音 RAG 控制台
+
+`console_server.py` 提供一个人工评测页面。浏览器使用 AudioWorklet 采集
+16 kHz mono float32 PCM，每 1 秒通过 WebSocket 发送一次；服务端把同一 PCM unit
+同时送入 MiniCPM AUDIO owner 和 Qwen3-ASR worker。ASR partial 进入独立
+latest-wins RAG worker 做预检索，final transcript 产生唯一可注入的权威检索结果。
+
+麦克风输入和 24 kHz 回答音频都只保存在内存中。控制台不使用 MediaRecorder，
+不生成 WAV/WebM/Opus，也不在服务端保存输入或输出音频。
+
+先启动 Qwen3-ASR：
+
+```bash
+CUDA_VISIBLE_DEVICES=2 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_HOST_IP=127.0.0.1 VLLM_PORT=18580 \
+NCCL_SOCKET_IFNAME=lo GLOO_SOCKET_IFNAME=lo \
+.venv-qwen/bin/python -m qwen_asr.cli.demo_streaming \
+  --asr-model-path "$(pwd)/models/Qwen3-ASR-1.7B" \
+  --host 127.0.0.1 --port 18180 \
+  --chunk-size-sec 1.0 --unfixed-chunk-num 2 --unfixed-token-num 5
+```
+
+再启动控制台：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+.venv/bin/python -u console_server.py \
+  --knowledge knowledge/squad_zh_25.json \
+  --full-text --host 0.0.0.0 --port 8005 \
+  --ssl-certfile /root/paddlejob/workspace/env_run/avatar_full/audio_dual_avatar/minicpm_demo/certs/cert.pem \
+  --ssl-keyfile /root/paddlejob/workspace/env_run/avatar_full/audio_dual_avatar/minicpm_demo/certs/key.pem \
+  --qwen-asr-url http://127.0.0.1:18180
+```
+
+打开 `https://127.0.0.1:8005/console`。证书是自签名证书，首次访问需要在
+浏览器中确认继续。麦克风需要 localhost 或 HTTPS。默认每个问题独立，开始新一轮时会重置
+MiniCPM session，但不会重新加载模型。
+
+也可以用仓库根目录的一键入口同时启动 Qwen3-ASR 和控制台：
+
+```bash
+./start_console.sh
+```
+
+脚本默认使用 ASR GPU `2`、MiniCPM GPU `0`、控制台端口 `8005`，并通过
+avatar 的证书启用 HTTPS。可通过 `ASR_GPU`、`MINICPM_GPU`、`ASR_PORT`、
+`CONSOLE_PORT`、`SSL_CERTFILE`、`SSL_KEYFILE` 和模型路径等环境变量覆盖。
+脚本退出时会自动回收它启动的 ASR 子进程。
+
+真实 WebSocket 集成入口：
+
+```bash
+.venv/bin/python tests/integration_console_stream.py \
+  --url wss://127.0.0.1:8005/ws/console \
+  --audio "/path/to/question.wav" \
+  --output outputs/console_integration
+```
+
+集成测试只把输入 WAV 作为测试 fixture 读成内存 PCM，不经过控制台保存。
+`squad_zh_25.json` 没有配套问题音频时，可先用
+`run_rag.py --retrieve-only --full-text` 验证检索；麦克风交互由页面完成。
+
+当前控制台第一版不实现 VAD、自动断句、用户打断或生成中途取消。

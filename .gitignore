@@ -2,6 +2,8 @@
 /models/
 /outputs/
 /.venv/
+/.venv-qwen/
+/.superpowers/
 /venv/
 __pycache__/
 .pytest_cache/

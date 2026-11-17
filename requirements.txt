@@ -1,4 +1,5 @@
 -r requirements-retrieval.txt
+-r requirements-console.txt
 transformers==4.51.0
 accelerate>=1.12,<2
 safetensors>=0.7
